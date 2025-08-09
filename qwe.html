@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="en" class="">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Blackjack Basic Strategy Trainer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script>
+        // Support TailwindCSS dark mode
+        if (localStorage.getItem('theme') === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+          document.documentElement.classList.add('dark')
+        } else {
+          document.documentElement.classList.remove('dark')
+        }
+    </script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .card {
+            width: 100px;
+            height: 140px;
+            border-radius: 10px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 10px;
+            font-size: 2rem;
+            font-weight: bold;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+            background-color: white; /* Always white */
+            border: 2px solid #e5e7eb; /* Light border */
+            transform-style: preserve-3d;
+            perspective: 1000px;
+        }
+        .card-red {
+            color: #D92D20;
+        }
+        .card-black {
+            color: #101828;
+        }
+        .strategy-table td, .strategy-table th {
+            border: 1px solid #e5e7eb;
+            text-align: center;
+            padding: 8px;
+            min-width: 40px;
+        }
+        /* Keep table text color consistent */
+        .dark .strategy-table td, .dark .strategy-table th {
+             color: #1f2937;
+        }
+
+        .correct {
+            background-color: #D1FADF;
+            border: 1px solid #039855;
+            color: #065F46;
+        }
+        .dark .correct {
+            background-color: #065F46;
+            border-color: #10B981;
+            color: #A7F3D0;
+        }
+        .incorrect {
+            background-color: #FEE4E2;
+            border: 1px solid #D92D20;
+            color: #991B1B;
+        }
+        .dark .incorrect {
+            background-color: #991B1B;
+            border-color: #F87171;
+            color: #FEE2E2;
+        }
+        .action-btn {
+            transition: all 0.2s ease-in-out;
+        }
+        .action-btn:hover {
+            transform: translateY(-2px);
+        }
+        .action-btn:active {
+            transform: translateY(0);
+        }
+        
+        /* Animation styles */
+        .card.hidden-initial {
+            opacity: 0;
+            transform: scale(0);
+        }
+
+        @keyframes deal-in {
+            from {
+                opacity: 0;
+                transform: translateY(-80px) rotateX(-90deg);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0) rotateX(0deg);
+            }
+        }
+
+        .deal-animation {
+            animation: deal-in 0.4s ease-out;
+        }
+
+    </style>
+</head>
+<body class="bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200 transition-colors duration-300">
+
+    <div class="container mx-auto p-4 md:p-8 max-w-5xl">
+        <header class="text-center mb-8 relative">
+            <h1 class="text-4xl font-bold text-gray-900 dark:text-white">Blackjack Basic Strategy Trainer</h1>
+            <p class="text-lg text-gray-600 dark:text-gray-400 mt-2">Master the optimal move for any hand.</p>
+            <div class="absolute top-0 right-0 flex items-center">
+                <span class="text-sm mr-2 text-gray-600 dark:text-gray-400">Dark Mode</span>
+                <button id="theme-toggle" class="w-12 h-6 rounded-full bg-gray-300 dark:bg-gray-700 flex items-center transition duration-300 focus:outline-none shadow">
+                    <div id="theme-toggle-indicator" class="w-6 h-6 relative rounded-full transition duration-300 transform bg-white shadow-md"></div>
+                </button>
+            </div>
+        </header>
+
+        <div id="setup-section" class="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-lg mb-8 text-center">
+            <h2 class="text-2xl font-semibold mb-4 text-gray-900 dark:text-white">How many hands to practice?</h2>
+            <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">An accuracy report will be generated after 20 hands.</p>
+            <input type="number" id="hand-count-input" class="w-40 text-center p-2 border-2 border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700 dark:text-white" value="20" min="1" max="100">
+            <button id="start-quiz-btn" class="ml-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-6 rounded-lg shadow-md">Start</button>
+        </div>
+
+        <main id="main-content" class="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-lg mb-8 hidden">
+            <div id="quiz-section">
+                <div class="flex justify-between items-center mb-4">
+                    <div id="hand-counter" class="text-left font-bold text-xl text-gray-700 dark:text-gray-300"></div>
+                    <div id="running-accuracy" class="text-right font-bold text-xl text-gray-700 dark:text-gray-300"></div>
+                </div>
+                <div class="mb-6">
+                    <h2 class="text-2xl font-semibold mb-3 text-center">Dealer's Upcard</h2>
+                    <div class="flex justify-center"><div id="dealer-card" class="card hidden-initial"></div></div>
+                    <p id="dealer-total" class="text-center text-xl font-bold mt-3"></p>
+                </div>
+                <div class="mb-6">
+                    <h2 class="text-2xl font-semibold mb-3 text-center">Your Hand</h2>
+                    <div class="flex justify-center space-x-4">
+                        <div id="player-card-1" class="card hidden-initial"></div>
+                        <div id="player-card-2" class="card hidden-initial"></div>
+                    </div>
+                     <p id="player-total" class="text-center text-xl font-bold mt-3"></p>
+                </div>
+                <div class="flex flex-wrap justify-center gap-3 md:gap-4 mb-6">
+                    <button id="btn-hit" class="action-btn bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg shadow-md">Hit</button>
+                    <button id="btn-stand" class="action-btn bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-6 rounded-lg shadow-md">Stand</button>
+                    <button id="btn-double" class="action-btn bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg shadow-md">Double</button>
+                    <button id="btn-split" class="action-btn bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-3 px-6 rounded-lg shadow-md">Split</button>
+                    <button id="btn-surrender" class="action-btn bg-gray-700 hover:bg-gray-800 text-white font-bold py-3 px-6 rounded-lg shadow-md">Surrender</button>
+                </div>
+                <div id="feedback" class="text-center text-lg font-semibold p-4 rounded-lg h-16 mb-4"></div>
+            </div>
+        </main>
+        
+        <div id="report-section" class="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-lg mb-8 hidden">
+            <h2 class="text-3xl font-bold text-center mb-2 text-gray-900 dark:text-white">Quiz Report</h2>
+            <p id="accuracy-text" class="text-center text-xl font-semibold mb-2 text-indigo-600 dark:text-indigo-400"></p>
+            <p id="time-rating" class="text-center text-lg mb-6"></p>
+            <div id="improvement-area">
+                <h3 class="text-2xl font-semibold mb-4 text-center">Hands to Improve On:</h3>
+                <ul id="wrong-guesses-list" class="list-disc list-inside mx-auto max-w-md space-y-2">
+                    <!-- Incorrect hands will be populated here -->
+                </ul>
+                <p id="no-mistakes-text" class="text-center text-gray-500 dark:text-gray-400 hidden">You made no mistakes. Great job!</p>
+            </div>
+            <div class="text-center mt-8">
+                <button id="play-again-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-8 rounded-lg shadow-md">Play Again</button>
+            </div>
+        </div>
+
+        <div id="strategy-chart-section" class="bg-white p-6 rounded-2xl shadow-lg">
+            <h2 class="text-3xl font-bold text-center mb-6 text-gray-900">Basic Strategy Chart</h2>
+            <!-- Strategy tables are unchanged -->
+            <div class="overflow-x-auto">
+                <div class="flex flex-col md:flex-row md:space-x-8">
+                    <div class="flex-1 mb-8 md:mb-0">
+                        <h3 class="text-xl font-semibold mb-3 text-center text-gray-800">Hard Totals</h3>
+                        <table class="w-full strategy-table">
+                           <thead><tr><th>Hand</th><th>2</th><th>3</th><th>4</th><th>5</th><th>6</th><th>7</th><th>8</th><th>9</th><th>10</th><th>A</th></tr></thead>
+                            <tbody>
+                                <tr><td>17-20</td><td class="bg-red-200">S</td><td class="bg-red-200">S</td><td class="bg-red-200">S</td><td class="bg-red-200">S</td><td class="bg-red-200">S</td><td class="bg-red-200">S</td><td class="bg-red-200">S</td><td class="bg-red-200">S</td><td class="bg-red-200">S</td><td class="bg-red-200">S</td></tr>
+                                <tr><td>16</td><td class="bg-red-200">S</td><td class="bg-red-200">S</td><td class="bg-red-200">S</td><td class="bg-red-200">S</td><td class="bg-red-200">S</td><td class="bg-blue-200">H</td><td class="bg-blue-200">H</td><td class="bg-blue-200">H</td><td class="bg-gray-300">SUR</td><td class="bg-gray-300">SUR</td></tr>
+                                <tr><td>15</td><td class="bg-red-200">S</td><td class="bg-red-200">S</td><td class="bg-red-200">S</td><td class="bg-red-200">S</td><td class="bg-red-200">S</td><td class="bg-blue-200">H</td><td class="bg-blue-200">H</td><td class="bg-blue-200">H</td><td class="bg-gray-300">SUR</td><td class="bg-blue-200">H</td></tr>
+                                <tr><td>14</td><td class="bg-red-200">S</td><td class="bg-red-200">S</td><td class="bg-red-200">S</td><td class="bg-red-200">S</td><td class="bg-red-200">S</td><td class="bg-blue-200">H</td><td class="bg-blue-200">H</td><td class="bg-blue-200">H</td><td class="bg-blue-200">H</td><td class="bg-blue-200">H</td></tr>
+                                <tr><td>13</td><td class="bg-red-200">S</td><td class="bg-red-200">S</td><td class="bg-red-200">S</td><td class="bg-red-200">S</td><td class="bg-red-200">S</td><td class="bg-blue-200">H</td><td class="bg-blue-200">H</td><td class="bg-blue-200">H</td><td class="bg-blue-200">H</td><td class="bg-blue-200">H</td></tr>
+                                <tr><td>12</td><td class="bg-blue-200">H</td><td class="bg-blue-200">H</td><td class="bg-red-200">S</td><td class="bg-red-200">S</td><td class="bg-red-200">S</td><td class="bg-blue-200">H</td><td class="bg-blue-200">H</td><td class="bg-blue-200">H</td><td class="bg-blue-200">H</td><td class="bg-blue-200">H</td></tr>
+                                <tr><td>11</td><td class="bg-green-200">D</td><td class="bg-green-200">D</td><td class="bg-green-200">D</td><td class="bg-green-200">D</td><td class="bg-green-200">D</td><td class="bg-green-200">D</td><td class="bg-green-200">D</td><td class="bg-green-200">D</td><td class="bg-green-200">D</td><td class="bg-green-200">D</td></tr>
+                                <tr><td>10</td><td class="bg-green-200">D</td><td class="bg-green-200">D</td><td class="bg-green-200">D</td><td class="bg-green-200">D</td><td class="bg-green-200">D</td><td class="bg-green-200">D</td><td class="bg-green-200">D</td><td class="bg-green-200">D</td><td class="bg-blue-200">H</td><td class="bg-blue-200">H</td></tr>
+                                <tr><td>9</td><td class="bg-blue-200">H</td><td class="bg-green-200">D</td><td class="bg-green-200">D</td><td class="bg-green-200">D</td><td class="bg-green-200">D</td><td class="bg-blue-200">H</td><td class="bg-blue-200">H</td><td class="bg-blue-200">H</td><td class="bg-blue-200">H</td><td class="bg-blue-200">H</td></tr>
+                                <tr><td>5-8</td><td class="bg-blue-200">H</td><td class="bg-blue-200">H</td><td class="bg-blue-200">H</td><td class="bg-blue-200">H</td><td class="bg-blue-200">H</td><td class="bg-blue-200">H</td><td class="bg-blue-200">H</td><td class="bg-blue-200">H</td><td class="bg-blue-200">H</td><td class="bg-blue-200">H</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="flex-1">
+                        <h3 class="text-xl font-semibold mb-3 text-center text-gray-800">Soft Totals</h3>
+                        <table class="w-full strategy-table mb-8">
+                            <thead><tr><th>Hand</th><th>2</th><th>3</th><th>4</th><th>5</th><th>6</th><th>7</th><th>8</th><th>9</th><th>10</th><th>A</th></tr></thead>
+                            <tbody>
+                                <tr><td>A,8-9</td><td class="bg-red-200">S</td><td class="bg-red-200">S</td><td class="bg-red-200">S</td><td class="bg-red-200">S</td><td class="bg-red-200">S</td><td class="bg-red-200">S</td><td class="bg-red-200">S</td><td class="bg-red-200">S</td><td class="bg-red-200">S</td><td class="bg-red-200">S</td></tr>
+                                <tr><td>A,7</td><td class="bg-red-200">S</td><td class="bg-green-200">D</td><td class="bg-green-200">D</td><td class="bg-green-200">D</td><td class="bg-green-200">D</td><td class="bg-red-200">S</td><td class="bg-red-200">S</td><td class="bg-blue-200">H</td><td class="bg-blue-200">H</td><td class="bg-blue-200">H</td></tr>
+                                <tr><td>A,6</td><td class="bg-blue-200">H</td><td class="bg-green-200">D</td><td class="bg-green-200">D</td><td class="bg-green-200">D</td><td class="bg-green-200">D</td><td class="bg-blue-200">H</td><td class="bg-blue-200">H</td><td class="bg-blue-200">H</td><td class="bg-blue-200">H</td><td class="bg-blue-200">H</td></tr>
+                                <tr><td>A,4-5</td><td class="bg-blue-200">H</td><td class="bg-blue-200">H</td><td class="bg-green-200">D</td><td class="bg-green-200">D</td><td class="bg-green-200">D</td><td class="bg-blue-200">H</td><td class="bg-blue-200">H</td><td class="bg-blue-200">H</td><td class="bg-blue-200">H</td><td class="bg-blue-200">H</td></tr>
+                                <tr><td>A,2-3</td><td class="bg-blue-200">H</td><td class="bg-blue-200">H</td><td class="bg-blue-200">H</td><td class="bg-green-200">D</td><td class="bg-green-200">D</td><td class="bg-blue-200">H</td><td class="bg-blue-200">H</td><td class="bg-blue-200">H</td><td class="bg-blue-200">H</td><td class="bg-blue-200">H</td></tr>
+                            </tbody>
+                        </table>
+                        <h3 class="text-xl font-semibold mb-3 text-center text-gray-800">Pairs</h3>
+                        <table class="w-full strategy-table">
+                            <thead><tr><th>Hand</th><th>2</th><th>3</th><th>4</th><th>5</th><th>6</th><th>7</th><th>8</th><th>9</th><th>10</th><th>A</th></tr></thead>
+                            <tbody>
+                                <tr><td>A,A</td><td class="bg-yellow-200">Y</td><td class="bg-yellow-200">Y</td><td class="bg-yellow-200">Y</td><td class="bg-yellow-200">Y</td><td class="bg-yellow-200">Y</td><td class="bg-yellow-200">Y</td><td class="bg-yellow-200">Y</td><td class="bg-yellow-200">Y</td><td class="bg-yellow-200">Y</td><td class="bg-yellow-200">Y</td></tr>
+                                <tr><td>10,10</td><td class="bg-red-200">N</td><td class="bg-red-200">N</td><td class="bg-red-200">N</td><td class="bg-red-200">N</td><td class="bg-red-200">N</td><td class="bg-red-200">N</td><td class="bg-red-200">N</td><td class="bg-red-200">N</td><td class="bg-red-200">N</td><td class="bg-red-200">N</td></tr>
+                                <tr><td>9,9</td><td class="bg-yellow-200">Y</td><td class="bg-yellow-200">Y</td><td class="bg-yellow-200">Y</td><td class="bg-yellow-200">Y</td><td class="bg-yellow-200">Y</td><td class="bg-red-200">N</td><td class="bg-yellow-200">Y</td><td class="bg-yellow-200">Y</td><td class="bg-red-200">N</td><td class="bg-red-200">N</td></tr>
+                                <tr><td>8,8</td><td class="bg-yellow-200">Y</td><td class="bg-yellow-200">Y</td><td class="bg-yellow-200">Y</td><td class="bg-yellow-200">Y</td><td class="bg-yellow-200">Y</td><td class="bg-yellow-200">Y</td><td class="bg-yellow-200">Y</td><td class="bg-yellow-200">Y</td><td class="bg-yellow-200">Y</td><td class="bg-yellow-200">Y</td></tr>
+                                <tr><td>7,7</td><td class="bg-yellow-200">Y</td><td class="bg-yellow-200">Y</td><td class="bg-yellow-200">Y</td><td class="bg-yellow-200">Y</td><td class="bg-yellow-200">Y</td><td class="bg-yellow-200">Y</td><td class="bg-blue-200">H</td><td class="bg-blue-200">H</td><td class="bg-blue-200">H</td><td class="bg-blue-200">H</td></tr>
+                                <tr><td>6,6</td><td class="bg-yellow-200">Y</td><td class="bg-yellow-200">Y</td><td class="bg-yellow-200">Y</td><td class="bg-yellow-200">Y</td><td class="bg-yellow-200">Y</td><td class="bg-blue-200">H</td><td class="bg-blue-200">H</td><td class="bg-blue-200">H</td><td class="bg-blue-200">H</td><td class="bg-blue-200">H</td></tr>
+                                <tr><td>5,5</td><td class="bg-green-200">D</td><td class="bg-green-200">D</td><td class="bg-green-200">D</td><td class="bg-green-200">D</td><td class="bg-green-200">D</td><td class="bg-green-200">D</td><td class="bg-green-200">D</td><td class="bg-green-200">D</td><td class="bg-blue-200">H</td><td class="bg-blue-200">H</td></tr>
+                                <tr><td>4,4</td><td class="bg-blue-200">H</td><td class="bg-blue-200">H</td><td class="bg-blue-200">H</td><td class="bg-yellow-200">Y</td><td class="bg-yellow-200">Y</td><td class="bg-blue-200">H</td><td class="bg-blue-200">H</td><td class="bg-blue-200">H</td><td class="bg-blue-200">H</td><td class="bg-blue-200">H</td></tr>
+                                <tr><td>3,3</td><td class="bg-yellow-200">Y</td><td class="bg-yellow-200">Y</td><td class="bg-yellow-200">Y</td><td class="bg-yellow-200">Y</td><td class="bg-yellow-200">Y</td><td class="bg-yellow-200">Y</td><td class="bg-blue-200">H</td><td class="bg-blue-200">H</td><td class="bg-blue-200">H</td><td class="bg-blue-200">H</td></tr>
+                                <tr><td>2,2</td><td class="bg-yellow-200">Y</td><td class="bg-yellow-200">Y</td><td class="bg-yellow-200">Y</td><td class="bg-yellow-200">Y</td><td class="bg-yellow-200">Y</td><td class="bg-yellow-200">Y</td><td class="bg-blue-200">H</td><td class="bg-blue-200">H</td><td class="bg-blue-200">H</td><td class="bg-blue-200">H</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <footer class="text-center text-gray-500 dark:text-gray-400 mt-8 text-sm">
+            <p>This tool is for educational purposes. Always gamble responsibly.</p>
+        </footer>
+    </div>
+
+    <script>
+        // --- DOM Elements ---
+        const themeToggle = document.getElementById('theme-toggle');
+        const themeToggleIndicator = document.getElementById('theme-toggle-indicator');
+        const setupSection = document.getElementById('setup-section');
+        const mainContent = document.getElementById('main-content');
+        const reportSection = document.getElementById('report-section');
+        const strategyChartSection = document.getElementById('strategy-chart-section');
+        const handCountInput = document.getElementById('hand-count-input');
+        const startQuizBtn = document.getElementById('start-quiz-btn');
+        const playAgainBtn = document.getElementById('play-again-btn');
+        const handCounterEl = document.getElementById('hand-counter');
+        const runningAccuracyEl = document.getElementById('running-accuracy');
+        const dealerCardEl = document.getElementById('dealer-card');
+        const playerCard1El = document.getElementById('player-card-1');
+        const playerCard2El = document.getElementById('player-card-2');
+        const playerTotalEl = document.getElementById('player-total');
+        const dealerTotalEl = document.getElementById('dealer-total');
+        const feedbackEl = document.getElementById('feedback');
+        const accuracyTextEl = document.getElementById('accuracy-text');
+        const timeRatingEl = document.getElementById('time-rating');
+        const wrongGuessesListEl = document.getElementById('wrong-guesses-list');
+        const noMistakesTextEl = document.getElementById('no-mistakes-text');
+        const actionButtons = [
+            document.getElementById('btn-hit'), document.getElementById('btn-stand'),
+            document.getElementById('btn-double'), document.getElementById('btn-split'),
+            document.getElementById('btn-surrender')
+        ];
+
+        // --- Game State ---
+        let playerHand = [], dealerCard, correctAnswer;
+        let totalHands = 20, currentHand = 0;
+        let totalAttempts = 0, correctFirstTry = 0;
+        let wrongGuesses = [];
+        let isFirstGuess = true;
+        let handStartTime = 0;
+        let decisionTimes = [];
+
+        // --- Card & Strategy Data (condensed for brevity) ---
+        const ranks = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'];
+        const suits = ['♥', '♦', '♣', '♠'];
+        const suitColors = { '♥': 'card-red', '♦': 'card-red', '♣': 'card-black', '♠': 'card-black' };
+        const hardTotals = {'20':{'2':'S','3':'S','4':'S','5':'S','6':'S','7':'S','8':'S','9':'S','10':'S','A':'S'},'19':{'2':'S','3':'S','4':'S','5':'S','6':'S','7':'S','8':'S','9':'S','10':'S','A':'S'},'18':{'2':'S','3':'S','4':'S','5':'S','6':'S','7':'S','8':'S','9':'S','10':'S','A':'S'},'17':{'2':'S','3':'S','4':'S','5':'S','6':'S','7':'S','8':'S','9':'S','10':'S','A':'S'},'16':{'2':'S','3':'S','4':'S','5':'S','6':'S','7':'H','8':'H','9':'H','10':'SUR','A':'SUR'},'15':{'2':'S','3':'S','4':'S','5':'S','6':'S','7':'H','8':'H','9':'H','10':'SUR','A':'H'},'14':{'2':'S','3':'S','4':'S','5':'S','6':'S','7':'H','8':'H','9':'H','10':'H','A':'H'},'13':{'2':'S','3':'S','4':'S','5':'S','6':'S','7':'H','8':'H','9':'H','10':'H','A':'H'},'12':{'2':'H','3':'H','4':'S','5':'S','6':'S','7':'H','8':'H','9':'H','10':'H','A':'H'},'11':{'2':'D','3':'D','4':'D','5':'D','6':'D','7':'D','8':'D','9':'D','10':'D','A':'D'},'10':{'2':'D','3':'D','4':'D','5':'D','6':'D','7':'D','8':'D','9':'D','10':'H','A':'H'},'9':{'2':'H','3':'D','4':'D','5':'D','6':'D','7':'H','8':'H','9':'H','10':'H','A':'H'},'8':{'2':'H','3':'H','4':'H','5':'H','6':'H','7':'H','8':'H','9':'H','10':'H','A':'H'},'7':{'2':'H','3':'H','4':'H','5':'H','6':'H','7':'H','8':'H','9':'H','10':'H','A':'H'},'6':{'2':'H','3':'H','4':'H','5':'H','6':'H','7':'H','8':'H','9':'H','10':'H','A':'H'},'5':{'2':'H','3':'H','4':'H','5':'H','6':'H','7':'H','8':'H','9':'H','10':'H','A':'H'}};
+        const softTotals = {'A,9':{'2':'S','3':'S','4':'S','5':'S','6':'S','7':'S','8':'S','9':'S','10':'S','A':'S'},'A,8':{'2':'S','3':'S','4':'S','5':'S','6':'S','7':'S','8':'S','9':'S','10':'S','A':'S'},'A,7':{'2':'S','3':'D','4':'D','5':'D','6':'D','7':'S','8':'S','9':'H','10':'H','A':'H'},'A,6':{'2':'H','3':'D','4':'D','5':'D','6':'D','7':'H','8':'H','9':'H','10':'H','A':'H'},'A,5':{'2':'H','3':'H','4':'D','5':'D','6':'D','7':'H','8':'H','9':'H','10':'H','A':'H'},'A,4':{'2':'H','3':'H','4':'D','5':'D','6':'D','7':'H','8':'H','9':'H','10':'H','A':'H'},'A,3':{'2':'H','3':'H','4':'H','5':'D','6':'D','7':'H','8':'H','9':'H','10':'H','A':'H'},'A,2':{'2':'H','3':'H','4':'H','5':'D','6':'D','7':'H','8':'H','9':'H','10':'H','A':'H'}};
+        const pairs = {'A,A':{'2':'Y','3':'Y','4':'Y','5':'Y','6':'Y','7':'Y','8':'Y','9':'Y','10':'Y','A':'Y'},'10,10':{'2':'N','3':'N','4':'N','5':'N','6':'N','7':'N','8':'N','9':'N','10':'N','A':'N'},'9,9':{'2':'Y','3':'Y','4':'Y','5':'Y','6':'Y','7':'N','8':'Y','9':'Y','10':'N','A':'N'},'8,8':{'2':'Y','3':'Y','4':'Y','5':'Y','6':'Y','7':'Y','8':'Y','9':'Y','10':'Y','A':'Y'},'7,7':{'2':'Y','3':'Y','4':'Y','5':'Y','6':'Y','7':'Y','8':'H','9':'H','10':'H','A':'H'},'6,6':{'2':'Y','3':'Y','4':'Y','5':'Y','6':'Y','7':'H','8':'H','9':'H','10':'H','A':'H'},'5,5':{'2':'D','3':'D','4':'D','5':'D','6':'D','7':'D','8':'D','9':'D','10':'H','A':'H'},'4,4':{'2':'H','3':'H','4':'H','5':'Y','6':'Y','7':'H','8':'H','9':'H','10':'H','A':'H'},'3,3':{'2':'Y','3':'Y','4':'Y','5':'Y','6':'Y','7':'Y','8':'H','9':'H','10':'H','A':'H'},'2,2':{'2':'Y','3':'Y','4':'Y','5':'Y','6':'Y','7':'Y','8':'H','9':'H','10':'H','A':'H'}};
+
+        // --- Helper Functions ---
+        const getCardValue = c => 'JQK'.includes(c.rank) ? 10 : c.rank === 'A' ? 11 : parseInt(c.rank);
+        const getHandTotal = h => { let t = h.reduce((a, c) => a + getCardValue(c), 0), aces = h.filter(c => c.rank === 'A').length; while (t > 21 && aces-- > 0) t -= 10; return t; };
+        const isSoft = h => h.some(c => c.rank === 'A') && getHandTotal(h) !== h.reduce((a, c) => a + getCardValue(c), 0);
+        const getRandomCard = () => ({ rank: ranks[Math.floor(Math.random() * ranks.length)], suit: suits[Math.floor(Math.random() * suits.length)] });
+        
+        function renderCard(element, card) {
+            element.innerHTML = `<span>${card.rank}</span><span>${card.suit}</span>`;
+            element.className = `card ${suitColors[card.suit]}`;
+        }
+
+        function getCorrectAction() {
+            const p1 = playerHand[0], p2 = playerHand[1];
+            const dVal = getCardValue(dealerCard) === 11 ? 'A' : getCardValue(dealerCard).toString();
+            
+            // Case 1: Pair
+            if (p1.rank === p2.rank) {
+                const pRank = p1.rank === 'A' ? 'A' : (getCardValue(p1) === 10 ? '10' : p1.rank);
+                const action = pairs[`${pRank},${pRank}`]?.[dVal];
+                if (action === 'Y') return 'Split';
+                if (action === 'N') return 'Stand';
+                if (action === 'D') return 'Double';
+                if (action === 'H') return 'Hit'; // FIX: Handle Hit for pairs
+            }
+
+            // Case 2: Soft Total
+            if (isSoft(playerHand)) {
+                const other = p1.rank === 'A' ? p2 : p1;
+                const action = softTotals[`A,${getCardValue(other)}`]?.[dVal];
+                if (action === 'S') return 'Stand';
+                if (action === 'H') return 'Hit';
+                if (action === 'D') return 'Double';
+            }
+
+            // Case 3: Hard Total
+            const total = getHandTotal(playerHand);
+            if (hardTotals[total]) {
+                const action = hardTotals[total][dVal];
+                if (action === 'S') return 'Stand';
+                if (action === 'H') return 'Hit';
+                if (action === 'D') return 'Double';
+                if (action === 'SUR') return 'Surrender';
+            }
+
+            // Fallback (should be rare)
+            return 'Stand';
+        }
+
+        function newHand() {
+            if (currentHand >= totalHands) {
+                if (totalHands >= 20) showAccuracyReport();
+                else endQuiz();
+                return;
+            }
+            currentHand++;
+            isFirstGuess = true;
+            handCounterEl.textContent = `Hand: ${currentHand} of ${totalHands}`;
+            
+            // 1. Reset UI state
+            feedbackEl.textContent = '';
+            feedbackEl.className = 'text-center text-lg font-semibold p-4 rounded-lg h-16 mb-4';
+            playerTotalEl.textContent = '';
+            dealerTotalEl.textContent = '';
+            actionButtons.forEach(b => b.disabled = true);
+
+            const allCardEls = [dealerCardEl, playerCard1El, playerCard2El];
+            allCardEls.forEach(cardEl => {
+                cardEl.classList.add('hidden-initial');
+                cardEl.classList.remove('deal-animation');
+                cardEl.innerHTML = '';
+            });
+
+            // 2. Generate new cards
+            playerHand = [getRandomCard(), getRandomCard()];
+            while (getHandTotal(playerHand) === 21) playerHand = [getRandomCard(), getRandomCard()];
+            dealerCard = getRandomCard();
+            correctAnswer = getCorrectAction();
+
+            // 3. Deal cards with staggered animation
+            setTimeout(() => {
+                renderCard(dealerCardEl, dealerCard);
+                dealerCardEl.classList.remove('hidden-initial');
+                dealerCardEl.classList.add('deal-animation');
+            }, 0);
+
+            setTimeout(() => {
+                renderCard(playerCard1El, playerHand[0]);
+                playerCard1El.classList.remove('hidden-initial');
+                playerCard1El.classList.add('deal-animation');
+            }, 150);
+
+            setTimeout(() => {
+                renderCard(playerCard2El, playerHand[1]);
+                playerCard2El.classList.remove('hidden-initial');
+                playerCard2El.classList.add('deal-animation');
+            }, 300);
+
+            // 4. Update text and enable controls after animation
+            setTimeout(() => {
+                let playerTotalText = `Total: ${getHandTotal(playerHand)}`;
+                if (isSoft(playerHand)) playerTotalText += ` (Soft)`;
+                playerTotalEl.textContent = playerTotalText;
+                
+                const dealerValue = getCardValue(dealerCard);
+                dealerTotalEl.textContent = `Showing: ${dealerCard.rank === 'A' ? 'A' : dealerValue}`;
+
+                actionButtons.forEach(b => b.disabled = false);
+                handStartTime = Date.now();
+            }, 450);
+        }
+
+        function updateRunningAccuracy() {
+            if (totalAttempts > 0) {
+                const accuracy = ((correctFirstTry / totalAttempts) * 100).toFixed(1);
+                runningAccuracyEl.textContent = `Accuracy: ${accuracy}%`;
+            } else {
+                runningAccuracyEl.textContent = 'Accuracy: -';
+            }
+        }
+
+        function checkAnswer(userAction) {
+            if (userAction === correctAnswer) {
+                feedbackEl.textContent = 'Correct!';
+                feedbackEl.className = 'text-center text-lg font-semibold p-4 rounded-lg h-16 mb-4 correct';
+                actionButtons.forEach(b => b.disabled = true);
+                if (isFirstGuess) {
+                    correctFirstTry++;
+                    const timeTaken = (Date.now() - handStartTime) / 1000;
+                    decisionTimes.push(timeTaken);
+                }
+                totalAttempts++;
+                updateRunningAccuracy();
+                setTimeout(newHand, 500);
+            } else {
+                feedbackEl.textContent = 'Incorrect. Try again.';
+                feedbackEl.className = 'text-center text-lg font-semibold p-4 rounded-lg h-16 mb-4 incorrect';
+                if (isFirstGuess) {
+                    totalAttempts++;
+                    wrongGuesses.push({
+                        playerHand,
+                        dealerCard,
+                        correctAction: correctAnswer,
+                        playerTotal: getHandTotal(playerHand),
+                        isSoft: isSoft(playerHand)
+                    });
+                    updateRunningAccuracy();
+                }
+                isFirstGuess = false;
+            }
+        }
+        
+        function showAccuracyReport() {
+            mainContent.classList.add('hidden');
+            reportSection.classList.remove('hidden');
+            const accuracy = totalAttempts > 0 ? ((correctFirstTry / totalAttempts) * 100).toFixed(1) : 100;
+            accuracyTextEl.textContent = `Accuracy: ${accuracy}%`;
+
+            const avgTime = decisionTimes.length > 0 ? decisionTimes.reduce((a, b) => a + b, 0) / decisionTimes.length : 0;
+            let timeRatingText, timeRatingColor;
+            if (avgTime < 2.5) {
+                timeRatingText = `Avg. Decision Time: ${avgTime.toFixed(2)}s (Very Fast)`;
+                timeRatingColor = 'text-green-500 dark:text-green-400';
+            } else if (avgTime < 5) {
+                timeRatingText = `Avg. Decision Time: ${avgTime.toFixed(2)}s (Fast)`;
+                timeRatingColor = 'text-blue-500 dark:text-blue-400';
+            } else {
+                timeRatingText = `Avg. Decision Time: ${avgTime.toFixed(2)}s (Average)`;
+                timeRatingColor = 'text-yellow-500 dark:text-yellow-400';
+            }
+            timeRatingEl.textContent = timeRatingText;
+            timeRatingEl.className = `text-center text-lg mb-6 ${timeRatingColor}`;
+
+            wrongGuessesListEl.innerHTML = '';
+            if (wrongGuesses.length > 0) {
+                noMistakesTextEl.classList.add('hidden');
+                const uniqueWrongGuesses = [...new Map(wrongGuesses.map(item => [JSON.stringify(item.playerHand) + JSON.stringify(item.dealerCard), item])).values()];
+                uniqueWrongGuesses.forEach(guess => {
+                    const li = document.createElement('li');
+                    const pTotal = guess.isSoft ? `Soft ${guess.playerTotal}` : `Hard ${guess.playerTotal}`;
+                    li.textContent = `Your ${pTotal} vs. Dealer ${guess.dealerCard.rank} → Correct action: ${guess.correctAction}`;
+                    wrongGuessesListEl.appendChild(li);
+                });
+            } else {
+                noMistakesTextEl.classList.remove('hidden');
+            }
+        }
+
+        function endQuiz() {
+            mainContent.classList.add('hidden');
+            reportSection.classList.add('hidden');
+            setupSection.classList.remove('hidden');
+        }
+
+        function startQuiz() {
+            totalHands = parseInt(handCountInput.value) || 20;
+            currentHand = 0;
+            correctFirstTry = 0;
+            totalAttempts = 0;
+            wrongGuesses = [];
+            decisionTimes = [];
+            setupSection.classList.add('hidden');
+            reportSection.classList.add('hidden');
+            mainContent.classList.remove('hidden');
+            updateRunningAccuracy();
+            newHand();
+        }
+        
+        function toggleTheme() {
+            const isDark = document.documentElement.classList.toggle('dark');
+            localStorage.setItem('theme', isDark ? 'dark' : 'light');
+            updateToggleIndicator(isDark);
+        }
+
+        function updateToggleIndicator(isDark) {
+             themeToggleIndicator.style.transform = isDark ? 'translateX(1.5rem)' : 'translateX(0)';
+        }
+
+        // --- Event Listeners ---
+        actionButtons.forEach(btn => btn.addEventListener('click', () => checkAnswer(btn.textContent)));
+        startQuizBtn.addEventListener('click', startQuiz);
+        playAgainBtn.addEventListener('click', startQuiz);
+        themeToggle.addEventListener('click', toggleTheme);
+
+        // --- Initial Load ---
+        updateToggleIndicator(document.documentElement.classList.contains('dark'));
+        strategyChartSection.classList.remove('hidden'); // Show chart by default
+    </script>
+</body>
+</html>
