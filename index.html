@@ -298,7 +298,7 @@
 
             switch (handType) {
                 case 'soft':
-                    hand = [{ rank: 'A', suit: suits[0] }, getRandomCard(['A', '10', 'J', 'Q', 'K'])];
+                    hand = [{ rank: 'A', suit: suits[Math.floor(Math.random()*4)] }, getRandomCard(['A', '10', 'J', 'Q', 'K'])];
                     break;
                 case 'pairs':
                     const rank = ranks[Math.floor(Math.random() * ranks.length)];
@@ -312,9 +312,9 @@
                         [[{rank:'10'}, {rank:'5'}], {rank:'10'}],
                     ];
                     const selected = surrenderHands[Math.floor(Math.random() * surrenderHands.length)];
-                    hand = selected[0];
-                    dealerCard = selected[1];
-                    return { hand, dealerCard: { ...dealerCard, suit: suits[0] } };
+                    hand = selected[0].map(c => ({...c, suit: suits[Math.floor(Math.random()*4)]}));
+                    dealerCard = { ...selected[1], suit: suits[Math.floor(Math.random()*4)] };
+                    return { hand, dealerCard };
                 case 'hard':
                     do {
                         hand = [getRandomCard(['A']), getRandomCard(['A'])];
