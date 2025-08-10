@@ -209,7 +209,13 @@
             if (pTotal === 15 && dVal === 10) return true;
             return false;
         };
-        const getRandomCard = () => ({ rank: ranks[Math.floor(Math.random() * ranks.length)], suit: suits[Math.floor(Math.random() * suits.length)] });
+        const getRandomCard = (excludeRank = []) => {
+            let rank;
+            do {
+                rank = ranks[Math.floor(Math.random() * ranks.length)];
+            } while (excludeRank.includes(rank));
+            return { rank, suit: suits[Math.floor(Math.random() * suits.length)] };
+        };
         
         function renderCard(element, card) {
             element.innerHTML = `<span>${card.rank}</span><span>${card.suit}</span>`;
@@ -271,6 +277,59 @@
             return "This is the mathematically optimal move for this scenario.";
         }
         
+        function generateSpecificHand() {
+            const { trainOn } = gameSettings;
+            let hand, dealerCard;
+
+            if (trainOn.challenge && mistakes.length > 0) {
+                const mistake = mistakes[Math.floor(Math.random() * mistakes.length)];
+                return { hand: mistake.playerHand, dealerCard: mistake.dealerCard };
+            }
+            
+            let handType = 'all';
+            if (!trainOn.all) {
+                const types = [];
+                if (trainOn.hard) types.push('hard');
+                if (trainOn.soft) types.push('soft');
+                if (trainOn.pairs) types.push('pairs');
+                if (trainOn.surrender) types.push('surrender');
+                handType = types[Math.floor(Math.random() * types.length)];
+            }
+
+            switch (handType) {
+                case 'soft':
+                    hand = [{ rank: 'A', suit: suits[0] }, getRandomCard(['A', '10', 'J', 'Q', 'K'])];
+                    break;
+                case 'pairs':
+                    const rank = ranks[Math.floor(Math.random() * ranks.length)];
+                    hand = [{ rank, suit: suits[0] }, { rank, suit: suits[1] }];
+                    break;
+                case 'surrender':
+                    const surrenderHands = [
+                        [[{rank:'10'}, {rank:'6'}], {rank:'9'}],
+                        [[{rank:'10'}, {rank:'6'}], {rank:'10'}],
+                        [[{rank:'9'}, {rank:'7'}], {rank:'A'}],
+                        [[{rank:'10'}, {rank:'5'}], {rank:'10'}],
+                    ];
+                    const selected = surrenderHands[Math.floor(Math.random() * surrenderHands.length)];
+                    hand = selected[0];
+                    dealerCard = selected[1];
+                    return { hand, dealerCard: { ...dealerCard, suit: suits[0] } };
+                case 'hard':
+                    do {
+                        hand = [getRandomCard(['A']), getRandomCard(['A'])];
+                    } while (isPair(hand) || isSoft(hand));
+                    break;
+                default: // all
+                    do {
+                        hand = [getRandomCard(), getRandomCard()];
+                    } while (getHandTotal(hand) === 21);
+            }
+            
+            dealerCard = getRandomCard();
+            return { hand, dealerCard };
+        }
+
         function newHand() {
             if (currentHand >= totalHands) {
                 updateLifetimeStats();
@@ -279,38 +338,8 @@
                 return;
             }
             
-            let handIsValid = false;
-            let generatedHand, generatedDealerCard;
-
-            if(gameSettings.trainOn.challenge && mistakes.length > 0) {
-                const mistake = mistakes[Math.floor(Math.random() * mistakes.length)];
-                generatedHand = mistake.playerHand;
-                generatedDealerCard = mistake.dealerCard;
-                handIsValid = true;
-            } else {
-                while(!handIsValid) {
-                    generatedHand = [getRandomCard(), getRandomCard()];
-                    generatedDealerCard = getRandomCard();
-                    if (getHandTotal(generatedHand) === 21) continue;
-
-                    const { trainOn } = gameSettings;
-                    if (trainOn.all) {
-                        handIsValid = true;
-                    } else {
-                        const thisIsPair = isPair(generatedHand);
-                        const thisIsSoft = isSoft(generatedHand);
-                        const thisIsSurrender = isSurrender(generatedHand, generatedDealerCard);
-                        const thisIsHard = !thisIsPair && !thisIsSoft;
-
-                        if (trainOn.pairs && thisIsPair) handIsValid = true;
-                        if (trainOn.soft && thisIsSoft) handIsValid = true;
-                        if (trainOn.hard && thisIsHard) handIsValid = true;
-                        if (trainOn.surrender && thisIsSurrender) handIsValid = true;
-                    }
-                }
-            }
-            
-            playerHand = generatedHand;
+            const { hand, dealerCard: generatedDealerCard } = generateSpecificHand();
+            playerHand = hand;
             dealerCard = generatedDealerCard;
             correctAnswer = getCorrectAction(playerHand, dealerCard, gameSettings);
 
