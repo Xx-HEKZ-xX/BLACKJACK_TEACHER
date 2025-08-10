@@ -55,6 +55,8 @@ This trainer is packed with features to create a comprehensive and user-friendly
 
 # How to Use
 
+## Online Play
+- Click the following link to play online. https://xx-hekz-xx.github.io/BLACKJACK_TEACHER/
 ## Local Setup
 1. Clone the repository or download the `index.html` file.  
 2. Open `index.html` in any modern web browser (Chrome, Firefox, Edge, etc.).
