@@ -48,6 +48,10 @@
         }
         .action-btn:hover { transform: translateY(-2px); }
         .action-btn:active { transform: translateY(0); }
+        .action-btn.key-pressed {
+            transform: scale(1.1);
+            filter: brightness(1.2);
+        }
         .card.hidden-initial { opacity: 0; transform: scale(0); }
         @keyframes deal-in {
             from { opacity: 0; transform: translateY(-80px) rotateX(-90deg); }
@@ -123,6 +127,7 @@
                     <div><input type="checkbox" id="train-soft" class="form-checkbox hand-type"> <label for="train-soft">Soft Totals</label></div>
                     <div><input type="checkbox" id="train-pairs" class="form-checkbox hand-type"> <label for="train-pairs">Pairs</label></div>
                     <div><input type="checkbox" id="train-surrender" class="form-checkbox hand-type"> <label for="train-surrender">Surrender</label></div>
+                    <div><input type="checkbox" id="train-challenge" class="form-checkbox hand-type"> <label for="train-challenge">Challenge Me</label></div>
                 </div>
                 <p id="hand-type-error" class="text-center text-red-500 text-xs mt-2 hidden">Please select at least one hand type to train.</p>
             </div>
@@ -184,6 +189,7 @@
         let decisionTimes = [];
         let gameSettings = {};
         let lifetimeStats = { totalHandsPlayed: 0, totalCorrectFirstTries: 0 };
+        let mistakes = [];
 
         // --- Card Data ---
         const ranks = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'];
@@ -252,6 +258,18 @@
             
             return 'Hit';
         }
+
+        function getStrategyExplanation(pHand, dCard, settings, action) {
+            const pTotal = getHandTotal(pHand);
+            const dVal = getCardValue(dCard);
+            if (action === "Stand" && pTotal >= 17 && !isSoft(pHand)) return "Always stand on a hard 17 or higher.";
+            if (action === "Stand" && pTotal <= 16 && dVal <= 6) return "Stand because the dealer has a high chance of busting with a low card.";
+            if (action === "Hit" && pTotal <= 11) return "Always hit on 11 or less to improve your hand without risk of busting.";
+            if (action === "Double" && pTotal === 11) return "This is the best hand to double down on for maximum profit.";
+            if (action === "Split" && isPair(pHand) && pHand[0].rank === 'A') return "Always split Aces to get two strong starting hands.";
+            if (action === "Surrender") return "Surrender gives you the best odds to save half your bet in a very unfavorable situation.";
+            return "This is the mathematically optimal move for this scenario.";
+        }
         
         function newHand() {
             if (currentHand >= totalHands) {
@@ -263,24 +281,32 @@
             
             let handIsValid = false;
             let generatedHand, generatedDealerCard;
-            while(!handIsValid) {
-                generatedHand = [getRandomCard(), getRandomCard()];
-                generatedDealerCard = getRandomCard();
-                if (getHandTotal(generatedHand) === 21) continue;
 
-                const { trainOn } = gameSettings;
-                if (trainOn.all) {
-                    handIsValid = true;
-                } else {
-                    const thisIsPair = isPair(generatedHand);
-                    const thisIsSoft = isSoft(generatedHand);
-                    const thisIsSurrender = isSurrender(generatedHand, generatedDealerCard);
-                    const thisIsHard = !thisIsPair && !thisIsSoft;
+            if(gameSettings.trainOn.challenge && mistakes.length > 0) {
+                const mistake = mistakes[Math.floor(Math.random() * mistakes.length)];
+                generatedHand = mistake.playerHand;
+                generatedDealerCard = mistake.dealerCard;
+                handIsValid = true;
+            } else {
+                while(!handIsValid) {
+                    generatedHand = [getRandomCard(), getRandomCard()];
+                    generatedDealerCard = getRandomCard();
+                    if (getHandTotal(generatedHand) === 21) continue;
 
-                    if (trainOn.pairs && thisIsPair) handIsValid = true;
-                    if (trainOn.soft && thisIsSoft) handIsValid = true;
-                    if (trainOn.hard && thisIsHard) handIsValid = true;
-                    if (trainOn.surrender && thisIsSurrender) handIsValid = true;
+                    const { trainOn } = gameSettings;
+                    if (trainOn.all) {
+                        handIsValid = true;
+                    } else {
+                        const thisIsPair = isPair(generatedHand);
+                        const thisIsSoft = isSoft(generatedHand);
+                        const thisIsSurrender = isSurrender(generatedHand, generatedDealerCard);
+                        const thisIsHard = !thisIsPair && !thisIsSoft;
+
+                        if (trainOn.pairs && thisIsPair) handIsValid = true;
+                        if (trainOn.soft && thisIsSoft) handIsValid = true;
+                        if (trainOn.hard && thisIsHard) handIsValid = true;
+                        if (trainOn.surrender && thisIsSurrender) handIsValid = true;
+                    }
                 }
             }
             
@@ -363,7 +389,9 @@
                 feedbackEl.className = 'text-center text-lg font-semibold p-4 rounded-lg h-16 mb-4 incorrect';
                 if (isFirstGuess) {
                     totalAttempts++;
-                    wrongGuesses.push({ playerHand, dealerCard, correctAnswer, playerTotal: getHandTotal(playerHand), isSoft: isSoft(playerHand) });
+                    const mistake = { playerHand, dealerCard, correctAnswer, playerTotal: getHandTotal(playerHand), isSoft: isSoft(playerHand) };
+                    wrongGuesses.push(mistake);
+                    saveMistake(mistake);
                     updateRunningAccuracy();
                 }
                 isFirstGuess = false;
@@ -379,11 +407,12 @@
                     <p id="time-rating" class="text-center text-lg mb-6"></p>
                     <div id="improvement-area">
                         <h3 class="text-2xl font-semibold mb-4 text-center">Hands to Improve On:</h3>
-                        <ul id="wrong-guesses-list" class="list-disc list-inside mx-auto max-w-md space-y-2"></ul>
+                        <ul id="wrong-guesses-list" class="list-disc list-inside mx-auto max-w-md space-y-4"></ul>
                         <p id="no-mistakes-text" class="text-center text-gray-400 hidden">You made no mistakes. Great job!</p>
                     </div>
                 </div>
                 <div class="text-center mt-8 space-x-4">
+                    <button id="main-menu-btn" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-3 px-8 rounded-lg shadow-md">Main Menu</button>
                     <button id="play-again-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-8 rounded-lg shadow-md">Play Again</button>
                     <button id="share-report-btn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-8 rounded-lg shadow-md">Share Report</button>
                 </div>
@@ -413,13 +442,15 @@
                     const handText = guess.playerHand.map(card => `${card.rank}${card.suit}`).join(', ');
                     const dealerText = `${guess.dealerCard.rank}${guess.dealerCard.suit}`;
                     const pTotal = guess.isSoft ? `Soft ${guess.playerTotal}` : `Hard ${guess.playerTotal}`;
-                    li.innerHTML = `Your <span class="font-mono">${handText}</span> (${pTotal}) vs. Dealer <span class="font-mono">${dealerText}</span> → Correct: <strong>${guess.correctAnswer}</strong>`;
+                    const explanation = getStrategyExplanation(guess.playerHand, guess.dealerCard, gameSettings, guess.correctAnswer);
+                    li.innerHTML = `Your <span class="font-mono">${handText}</span> (${pTotal}) vs. Dealer <span class="font-mono">${dealerText}</span> → Correct: <strong>${guess.correctAnswer}</strong><br><small class="text-gray-400">${explanation}</small>`;
                     wrongGuessesListEl.appendChild(li);
                 });
             } else {
                 noMistakesTextEl.classList.remove('hidden');
             }
 
+            document.getElementById('main-menu-btn').addEventListener('click', endQuiz);
             document.getElementById('play-again-btn').addEventListener('click', startQuiz);
             document.getElementById('share-report-btn').addEventListener('click', shareReport);
         }
@@ -439,6 +470,10 @@
             if (stats) {
                 lifetimeStats = JSON.parse(stats);
             }
+            const storedMistakes = localStorage.getItem('blackjackMistakes');
+            if(storedMistakes) {
+                mistakes = JSON.parse(storedMistakes);
+            }
             updateLifetimeStatsDisplay();
         }
 
@@ -456,14 +491,24 @@
         function updateLifetimeStatsDisplay() {
             const { totalHandsPlayed, totalCorrectFirstTries } = lifetimeStats;
             const accuracy = totalHandsPlayed > 0 ? ((totalCorrectFirstTries / totalHandsPlayed) * 100).toFixed(1) : 'N/A';
-            lifetimeStatsDisplay.textContent = `Total Hands: ${totalHandsPlayed} | Lifetime Accuracy: ${accuracy}%`;
+            lifetimeStatsDisplay.textContent = `Total Hands: ${totalHandsPlayed} | Lifetime Accuracy: ${accuracy}% | Mistakes to practice: ${mistakes.length}`;
         }
 
         function resetLifetimeStats() {
             if (confirm("Are you sure you want to reset your lifetime stats? This cannot be undone.")) {
                 lifetimeStats = { totalHandsPlayed: 0, totalCorrectFirstTries: 0 };
-                saveLifetimeStats();
+                mistakes = [];
+                localStorage.removeItem('blackjackLifetimeStats');
+                localStorage.removeItem('blackjackMistakes');
                 updateLifetimeStatsDisplay();
+            }
+        }
+
+        function saveMistake(mistake) {
+            const mistakeKey = JSON.stringify(mistake.playerHand.sort((a,b) => a.rank.localeCompare(b.rank))) + JSON.stringify(mistake.dealerCard);
+            if (!mistakes.some(m => JSON.stringify(m.playerHand.sort((a,b) => a.rank.localeCompare(b.rank))) + JSON.stringify(m.dealerCard) === mistakeKey)) {
+                mistakes.push(mistake);
+                localStorage.setItem('blackjackMistakes', JSON.stringify(mistakes));
             }
         }
 
@@ -531,9 +576,17 @@
                 soft: document.getElementById('train-soft').checked,
                 pairs: document.getElementById('train-pairs').checked,
                 surrender: document.getElementById('train-surrender').checked,
+                challenge: document.getElementById('train-challenge').checked
             };
 
-            if (!trainOn.all && !trainOn.hard && !trainOn.soft && !trainOn.pairs && !trainOn.surrender) {
+            if (!trainOn.all && !trainOn.hard && !trainOn.soft && !trainOn.pairs && !trainOn.surrender && !trainOn.challenge) {
+                handTypeError.textContent = "Please select at least one hand type to train.";
+                handTypeError.classList.remove('hidden');
+                return;
+            }
+
+            if (trainOn.challenge && mistakes.length === 0) {
+                handTypeError.textContent = "You have no mistakes to practice! Play some regular hands first.";
                 handTypeError.classList.remove('hidden');
                 return;
             }
@@ -678,6 +731,8 @@
 
             if (btn && !btn.disabled) {
                 btn.click();
+                btn.classList.add('key-pressed');
+                setTimeout(() => btn.classList.remove('key-pressed'), 200);
             }
         }
 
@@ -704,9 +759,9 @@
 
         handTypeCheckboxes.forEach(cb => {
             cb.addEventListener('change', () => {
-                if ([...handTypeCheckboxes].some(c => c.checked)) {
-                    trainAllCheckbox.checked = false;
-                }
+                let anyChecked = [...handTypeCheckboxes].some(c => c.checked);
+                trainAllCheckbox.checked = !anyChecked;
+                trainAllCheckbox.disabled = anyChecked;
             });
         });
 
